@@ -68,8 +68,9 @@ void *reader_thread(void *arg) {
 			g_num_reader_threads++;
 		}
 
-		buff_p = TAILQ_FIRST(&g_buffer_queue);
-		while (buff_p == NULL) {
+		while ((buff_p = TAILQ_FIRST(&g_buffer_queue)) == NULL) {
+			printf("reader_thread(%d) wait until getting more queue.\n",
+			    num);
 			pthread_cond_signal(&g_cond_writer);
 			pthread_cond_wait(&g_cond_reader, &g_mutex);
 		}
