@@ -4,29 +4,46 @@
 #include <string.h>
 #include <unistd.h>
 #include <assert.h>
+#include "queue.h"
 
 pthread_mutex_t g_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t g_cond_reader = PTHREAD_COND_INITIALIZER;
 pthread_cond_t g_cond_writer = PTHREAD_COND_INITIALIZER;
 
-#define G_BUFFER_EMPTY (-1)
-int g_bufferSizeInBytes = G_BUFFER_EMPTY;
 #define G_BUFFER_MAXLEN (100)
-char g_buffer[G_BUFFER_MAXLEN];
+struct g_buffer {
+	TAILQ_ENTRY(g_buffer) gb_entry;
+	int len;
+	char buff[G_BUFFER_MAXLEN];
+};
+TAILQ_HEAD(, g_buffer) g_buffer_queue;
+#define G_BUFFER_QUEUE_MAXLEN (16)
+int g_buffer_queue_len = 0;
 
-int get_external_data(char *buffer, int bufferSizeInBytes) {
+struct g_buffer *get_external_data(int len) {
+	struct g_buffer *buff_p;
 	int wait = rand() / (RAND_MAX / 10);
 
 	// Wait to get external data
 	usleep(wait);
-	return bufferSizeInBytes;
+
+	// Produce buffer
+	buff_p = malloc(sizeof(struct g_buffer));
+	assert(buff_p != NULL);
+	buff_p->len = len;
+	return buff_p;
 }
 
-void process_data(char *buffer, int bufferSizeInBytes) {
+void process_data(struct g_buffer *buff_p) {
 	int wait = rand() / (RAND_MAX / 10);
+
+	assert(buff_p != NULL);
 
 	// Wait to process data
 	usleep(wait);
+
+	// Consume buffer
+	free(buff_p);
 }
 
 /**
@@ -35,25 +52,27 @@ void process_data(char *buffer, int bufferSizeInBytes) {
  */
 void *reader_thread(void *arg) {
 	int num = (int) arg;
-	char buff[G_BUFFER_MAXLEN];
-	int len;
+	struct g_buffer *buff_p;
 
 	printf("reader_thread(%d) start.\n", num);
 
 	while(1) {
 		pthread_mutex_lock(&g_mutex);
-		while (g_bufferSizeInBytes == G_BUFFER_EMPTY) {
+		buff_p = TAILQ_FIRST(&g_buffer_queue);
+		while (buff_p == NULL) {
 			pthread_cond_wait(&g_cond_reader, &g_mutex);
 		}
-		len = g_bufferSizeInBytes;
-		memcpy(buff, g_buffer, len);
-		g_bufferSizeInBytes = G_BUFFER_EMPTY;
+		g_buffer_queue_len--;
+		TAILQ_REMOVE(&g_buffer_queue, buff_p, gb_entry);
+		printf("reader_thread(%d) size of queue = %d.\n",
+		    num, g_buffer_queue_len);
 		pthread_cond_signal(&g_cond_writer);
 		pthread_mutex_unlock(&g_mutex);
 
-		printf("reader_thread(%d) took data (len=%d).\n", num, len);
-		process_data(buff, len);
-		printf("reader_thread(%d) processed data (len=%d).\n", num, len);
+		printf("reader_thread(%d) took data (len=%d).\n",
+		    num, buff_p->len);
+		process_data(buff_p);
+		printf("reader_thread(%d) processed data.\n", num);
 	}
 
 	return NULL;
@@ -68,30 +87,28 @@ void *reader_thread(void *arg) {
 void *writer_thread(void *arg) {
 	int num = (int) arg;
 #define WRITER_BUFF_SIZE (num * 10)
-	char buff[WRITER_BUFF_SIZE];
-	int len;
+	struct g_buffer *buff_p;
 
 	assert(WRITER_BUFF_SIZE < G_BUFFER_MAXLEN);
 	printf("writer_thread(%d) start.\n", num);
 
 	while(1) {
-		len = get_external_data(buff, WRITER_BUFF_SIZE);
-		if (len < 0) {
-			printf("*** writer_thread(%d): get_external_data error!\n");
-			continue;
-		}
-		printf("writer_thread(%d) got data (len=%d).\n", num, len);
+		buff_p = get_external_data(WRITER_BUFF_SIZE);
+		printf("writer_thread(%d) got data (len=%d).\n",
+		    num, buff_p->len);
 
 		pthread_mutex_lock(&g_mutex);
-		while (g_bufferSizeInBytes != G_BUFFER_EMPTY) {
+		while (g_buffer_queue_len >= G_BUFFER_QUEUE_MAXLEN) {
 			pthread_cond_wait(&g_cond_writer, &g_mutex);
 		}
-		g_bufferSizeInBytes = len;
-		memcpy(g_buffer, buff, len);
+		g_buffer_queue_len++;
+		TAILQ_INSERT_TAIL(&g_buffer_queue, buff_p, gb_entry);
+		printf("writer_thread(%d) size of queue = %d.\n",
+		    num, g_buffer_queue_len);
 		pthread_cond_signal(&g_cond_reader);
 		pthread_mutex_unlock(&g_mutex);
 
-		printf("writer_thread(%d) wrote data (len=%d).\n", num, len);
+		printf("writer_thread(%d) wrote data.\n", num);
 	}
 
 	return NULL;
@@ -104,10 +121,11 @@ int main(int argc, char **argv) {
 	int i;
 	pthread_t reader_threads[N], writer_threads[M];
 
+	TAILQ_INIT(&g_buffer_queue);
+
 	for(i = 0; i < N; i++) {
 		pthread_create(&reader_threads[i], NULL, reader_thread, (void *) i);
 	}
-
 	for(i = 0; i < M; i++) {
 		pthread_create(&writer_threads[i], NULL, writer_thread, (void *) i);
 	}
