@@ -1,0 +1,73 @@
+
+QNX Take Home: Data Synchronization
+
+Using the QNX Neutrino API's described in our programmers guide write
+a program (non-compilation is ok, we want the gist of the logic and the appropriate
+APIs) that implements a reader/writer data stream.
+
+The "writer" threads will be accessing data from an external source (for example a
+device driver) using a serialized function and then placing this data into a shared
+buffer or data queue.  Different writers may be reading from different devices but 
+the data should all be placed in the common buffer or data queue.
+
+The "reader" threads will be reading this data from the shared buffer and then pseudo
+processing the data.  
+
+Your job is to fill in the body of the reader and writer threads so that they can
+pass data back and forth to one another.  This situation matches the synchronization
+and data management operations required when filling a processing pipeline with data 
+coming from hardware and passing through to various processing stages.
+
+Assume the following:
+- There will be N writers and M readers of the data.  The thread creation is specified
+  in the starter code, but feel free to adjust it to suit your needs.
+
+- Make Believe API's for data manipulation:
+  "writer" threads use the API:
+       int get_external_data(char *buffer, int bufferSizeInBytes)
+     
+     Where buffer is a pointer to a storage of bufferSizeInBytes that can be filled in.
+     The return value from this function indicates the number of bytes that have been
+     filled in or < 0 on error.
+  "reader" threads use the API:
+       void process_data(char *buffer, int bufferSizeInBytes)
+       
+     Where buffer is a pointer to the data to be processed that is bufferSizeInBytes
+     in length.
+     
+- Assume that all data buffers (i.e. data packets) that the writer threads get from the 
+  external source are important (i.e. no data gets dropped, lost, or overwritten).  Also 
+  assume that each data packet will only ever be processed once (i.e. each data packet
+  will only be be processed by one reader thread before the data is discarded). 
+
+- There is no memory constraint on the amount of data that is "in-flight" (totally
+  unrealistic, but simplifies life a bit) but you must manage all other memory
+  appropriately, this includes allocating initial buffers for "writers" to read 
+  from the device(s) into.  
+
+- The assignment will be judged on performance, so thread synchronization should be designed
+to avoid polling and wasted CPU cycles.
+  
+You should likely be able to write code that will compile without problem on any
+standard unix system with a POSIX interface (ie Linux) but as I indicated, compilation
+is not as important as the data structure design and how the readers and writers are
+synchronized with one another.
+
+A stub is provided for you to start with in the file answer.c
+
+*************************************************************************************
+
+As general resources, the you may want to download a 30 day trial version of QNX host 
+development tools and ‘VMWare’ target for developing/testing solutions.  It is not 
+mandatory to build and test the code but you may find it easier to work through the 
+solutions.
+
+http://www.qnx.com/products/evaluation/
+
+The may also find it useful to download some of the relevant documentation
+- QNX Neutrino Programmer’s Guide [neutrino_prog_guide.pdf]
+- QNX Neutrino C Library Reference [neutrino_lib_ref.pdf]
+- Getting Started with QNX Neutrino [getting_started.pdf] 
+
+http://www.qnx.com/download/group.html?programid=20945
+
