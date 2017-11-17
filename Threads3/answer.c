@@ -17,13 +17,15 @@ char g_buffer[G_BUFFER_MAXLEN];
 int get_external_data(char *buffer, int bufferSizeInBytes) {
 	int wait = rand() / (RAND_MAX / 10);
 
+	// Wait to get external data
 	usleep(wait);
 	return bufferSizeInBytes;
 }
 
 void process_data(char *buffer, int bufferSizeInBytes) {
-	int wait = rand() / (RAND_MAX / 20);
+	int wait = rand() / (RAND_MAX / 10);
 
+	// Wait to process data
 	usleep(wait);
 }
 
