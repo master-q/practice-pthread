@@ -6,6 +6,9 @@
 #include <assert.h>
 #include "queue.h"
 
+#define M 10
+#define N 20
+
 pthread_mutex_t g_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t g_cond_reader = PTHREAD_COND_INITIALIZER;
 pthread_cond_t g_cond_writer = PTHREAD_COND_INITIALIZER;
@@ -16,9 +19,12 @@ struct g_buffer {
 	int len;
 	char buff[G_BUFFER_MAXLEN];
 };
+
 TAILQ_HEAD(, g_buffer) g_buffer_queue;
 #define G_BUFFER_QUEUE_MAXLEN (16)
 int g_buffer_queue_len = 0;
+
+int g_num_reader_threads = 0;
 
 struct g_buffer *get_external_data(int len) {
 	struct g_buffer *buff_p;
@@ -58,8 +64,13 @@ void *reader_thread(void *arg) {
 
 	while(1) {
 		pthread_mutex_lock(&g_mutex);
+		if (g_num_reader_threads < N) {
+			g_num_reader_threads++;
+		}
+
 		buff_p = TAILQ_FIRST(&g_buffer_queue);
 		while (buff_p == NULL) {
+			pthread_cond_signal(&g_cond_writer);
 			pthread_cond_wait(&g_cond_reader, &g_mutex);
 		}
 		g_buffer_queue_len--;
@@ -99,6 +110,9 @@ void *writer_thread(void *arg) {
 
 		pthread_mutex_lock(&g_mutex);
 		while (g_buffer_queue_len >= G_BUFFER_QUEUE_MAXLEN) {
+			printf("writer_thread(%d) wait until getting less queue\n",
+			    num);
+			pthread_cond_signal(&g_cond_reader);
 			pthread_cond_wait(&g_cond_writer, &g_mutex);
 		}
 		g_buffer_queue_len++;
@@ -114,9 +128,15 @@ void *writer_thread(void *arg) {
 	return NULL;
 }
 
+void wait_ready_reader_threads(int num_thread) {
+	pthread_mutex_lock(&g_mutex);
+	while (g_num_reader_threads < num_thread) {
+		printf("g_num_reader_threads = %d\n", g_num_reader_threads);
+		pthread_cond_wait(&g_cond_writer, &g_mutex);
+	}
+	pthread_mutex_unlock(&g_mutex);
+}
 
-#define M 10
-#define N 20
 int main(int argc, char **argv) {
 	int i;
 	pthread_t reader_threads[N], writer_threads[M];
@@ -126,6 +146,7 @@ int main(int argc, char **argv) {
 	for(i = 0; i < N; i++) {
 		pthread_create(&reader_threads[i], NULL, reader_thread, (void *) i);
 	}
+	wait_ready_reader_threads(N);
 	for(i = 0; i < M; i++) {
 		pthread_create(&writer_threads[i], NULL, writer_thread, (void *) i);
 	}
