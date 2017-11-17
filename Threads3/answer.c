@@ -69,8 +69,7 @@ void *reader_thread(void *arg) {
 		}
 
 		while ((buff_p = TAILQ_FIRST(&g_buffer_queue)) == NULL) {
-			printf("reader_thread(%d) wait until getting more queue.\n",
-			    num);
+			// printf("reader_thread(%d) wait until getting more queue.\n", num);
 			pthread_cond_signal(&g_cond_writer);
 			pthread_cond_wait(&g_cond_reader, &g_mutex);
 		}
@@ -111,8 +110,7 @@ void *writer_thread(void *arg) {
 
 		pthread_mutex_lock(&g_mutex);
 		while (g_buffer_queue_len >= G_BUFFER_QUEUE_MAXLEN) {
-			printf("writer_thread(%d) wait until getting less queue\n",
-			    num);
+			// printf("writer_thread(%d) wait until getting less queue\n", num);
 			pthread_cond_signal(&g_cond_reader);
 			pthread_cond_wait(&g_cond_writer, &g_mutex);
 		}
